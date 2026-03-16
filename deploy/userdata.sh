@@ -1,9 +1,5 @@
 #!/bin/bash
-set -e
-
-# NovaLens EC2 Bootstrap Script
-# Amazon Linux 2023, Node.js 22, PM2
-
+# NovaLens EC2 Bootstrap — Amazon Linux 2023
 LOG=/var/log/novalens-setup.log
 exec > >(tee -a $LOG) 2>&1
 echo "=== NovaLens Setup Started: $(date) ==="
@@ -15,45 +11,31 @@ dnf update -y
 curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
 dnf install -y nodejs git
 
-# Verify versions
 echo "Node: $(node --version)"
 echo "npm: $(npm --version)"
-echo "git: $(git --version)"
 
 # Install PM2 globally
 npm install -g pm2
 
-# Setup app directory
+# Setup app
 APP_DIR=/home/ec2-user/novalens
-mkdir -p $APP_DIR
-
-# Clone repository
 git clone https://github.com/HAR5HA-7663/novalens.git $APP_DIR
 cd $APP_DIR
 
-# Install server dependencies
+# Install and build
 npm install --production
+cd client && npm install && npm run build && cd ..
 
-# Install client dependencies and build
-cd client
-npm install
-npm run build
-cd ..
-
-# Configure iptables: port 80 -> 3000
-iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3000
-# Save iptables rules
-dnf install -y iptables-services
-service iptables save
-systemctl enable iptables
-
-# Start with PM2
-pm2 start server/index.js --name novalens --env production
+# Run on port 80 directly as root (simplest approach for AL2023)
+PORT=80 pm2 start server/index.js --name novalens
 pm2 save
-pm2 startup systemd -u ec2-user --hp /home/ec2-user
 
-# Set ownership
+# Persist across reboots
+env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u root --hp /root
+systemctl enable pm2-root
+
 chown -R ec2-user:ec2-user $APP_DIR
 
 echo "=== NovaLens Setup Complete: $(date) ==="
-echo "App running at http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)"
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+echo "App running at http://$PUBLIC_IP"
