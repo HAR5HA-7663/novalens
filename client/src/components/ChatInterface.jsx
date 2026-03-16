@@ -49,7 +49,7 @@ export default function ChatInterface({ messages, onSend, onStop, isStreaming, h
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={hasImage ? 'Ask anything about the image...' : 'Upload an image to begin...'}
+              placeholder={hasImage ? 'Ask about your medical document...' : 'Upload a medical document to begin...'}
               disabled={!hasImage && isEmpty}
               rows={1}
               className="w-full bg-gray-900 border border-gray-700 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-600 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -93,20 +93,20 @@ function EmptyState({ hasImage }) {
   return (
     <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-6">
       <div className="text-5xl mb-4">
-        {hasImage ? '💬' : '🔭'}
+        {hasImage ? '🔬' : '🩺'}
       </div>
       <h3 className="text-lg font-semibold text-gray-300 mb-2">
-        {hasImage ? 'Ready to analyze' : 'Welcome to NovaLens'}
+        {hasImage ? 'Document ready' : 'Welcome to LabLens'}
       </h3>
       <p className="text-sm text-gray-500 max-w-sm leading-relaxed">
         {hasImage
-          ? 'Ask a question about your image or click a quick prompt on the left to get started.'
-          : 'Upload an image on the left to begin your visual intelligence session powered by Amazon Nova 2 Lite.'
+          ? 'Ask a question or use a quick prompt on the left. LabLens will explain your document in plain English.'
+          : 'Upload a lab report, prescription, or medical document to get a clear, plain-English explanation powered by Amazon Nova 2 Lite.'
         }
       </p>
       {hasImage && (
         <div className="mt-6 flex flex-wrap gap-2 justify-center">
-          {['What is this?', 'Describe in detail', 'Key insights?'].map(hint => (
+          {['What\'s abnormal?', 'Explain in simple terms', 'What should I ask my doctor?'].map(hint => (
             <span key={hint} className="text-xs px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-full text-gray-400">
               "{hint}"
             </span>
