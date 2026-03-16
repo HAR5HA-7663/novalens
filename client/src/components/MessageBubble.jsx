@@ -67,11 +67,17 @@ function FormattedText({ text, isUser }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
       {lines.map((line, i) => {
+        if (line.startsWith('### ')) {
+          return <p key={i} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '13px', marginTop: '10px', color: isUser ? '#000' : 'var(--lime)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{line.slice(4)}</p>;
+        }
         if (line.startsWith('## ')) {
-          return <p key={i} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '14px', marginTop: '6px', color: isUser ? '#000' : 'var(--text)' }}>{line.slice(3)}</p>;
+          return <p key={i} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '14px', marginTop: '8px', color: isUser ? '#000' : 'var(--text)' }}>{line.slice(3)}</p>;
         }
         if (line.startsWith('# ')) {
           return <p key={i} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '16px', marginTop: '8px' }}>{line.slice(2)}</p>;
+        }
+        if (line.startsWith('---')) {
+          return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border-2)', margin: '6px 0' }} />;
         }
         if (line.startsWith('- ') || line.startsWith('* ')) {
           return (
