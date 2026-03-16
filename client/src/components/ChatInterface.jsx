@@ -15,6 +15,7 @@ export default function ChatInterface({ messages, onSend, onStop, isStreaming, h
     if (!input.trim() || isStreaming) return;
     onSend(input.trim());
     setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = '48px';
   }, [input, isStreaming, onSend]);
 
   const handleKeyDown = useCallback((e) => {
@@ -27,63 +28,63 @@ export default function ChatInterface({ messages, onSend, onStop, isStreaming, h
   const isEmpty = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
-        {isEmpty ? (
-          <EmptyState hasImage={hasImage} />
-        ) : (
-          messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
-          ))
-        )}
-        <div ref={messagesEndRef} />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 24px 16px' }}>
+        <div style={{ maxWidth: '720px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {isEmpty ? (
+            <EmptyState hasImage={hasImage} />
+          ) : (
+            messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      {/* Input area */}
-      <div className="border-t border-gray-800 p-4 lg:p-6 bg-gray-950">
-        <form onSubmit={handleSubmit} className="flex gap-3 items-end">
-          <div className="flex-1 relative">
+      {/* Input bar */}
+      <div style={{
+        borderTop: '1px solid var(--border)',
+        padding: '16px 24px 20px',
+        background: 'var(--bg)'
+      }}>
+        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={hasImage ? 'Ask about your medical document...' : 'Upload a medical document to begin...'}
+              placeholder={hasImage ? 'Ask about your medical document...' : 'Upload a document to begin...'}
               disabled={!hasImage && isEmpty}
               rows={1}
-              className="w-full bg-gray-900 border border-gray-700 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-gray-100 placeholder-gray-600 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ minHeight: '48px', maxHeight: '120px' }}
+              className="chat-input"
               onInput={(e) => {
                 e.target.style.height = 'auto';
                 e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
               }}
             />
-          </div>
 
-          {isStreaming ? (
-            <button
-              type="button"
-              onClick={onStop}
-              className="flex-shrink-0 w-11 h-11 flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all"
-              title="Stop generation"
-            >
-              <StopIcon />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!input.trim() || (!hasImage && isEmpty)}
-              className="flex-shrink-0 w-11 h-11 flex items-center justify-center bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-xl transition-all"
-              title="Send message"
-            >
-              <SendIcon />
-            </button>
-          )}
-        </form>
-        <p className="text-xs text-gray-700 mt-2 text-center">
-          Enter to send · Shift+Enter for new line
-        </p>
+            {isStreaming ? (
+              <button type="button" onClick={onStop} className="stop-btn" title="Stop">
+                <StopIcon />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!input.trim() || (!hasImage && isEmpty)}
+                className="send-btn"
+                title="Send"
+              >
+                <SendIcon />
+              </button>
+            )}
+          </form>
+
+          <p style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '8px', textAlign: 'center' }}>
+            Enter to send · Shift+Enter for new line
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -91,23 +92,50 @@ export default function ChatInterface({ messages, onSend, onStop, isStreaming, h
 
 function EmptyState({ hasImage }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-6">
-      <div className="text-5xl mb-4">
-        {hasImage ? '🔬' : '🩺'}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', textAlign: 'center', padding: '40px 24px' }}>
+
+      {/* Decorative ring */}
+      <div style={{
+        width: '72px', height: '72px', borderRadius: '50%',
+        border: '1.5px solid var(--border-2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        marginBottom: '20px', position: 'relative'
+      }}>
+        <div style={{
+          width: '48px', height: '48px', borderRadius: '50%',
+          background: hasImage ? 'var(--lime-dim)' : 'var(--surface)',
+          border: `1.5px solid ${hasImage ? 'var(--lime-border)' : 'var(--border-2)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '22px'
+        }}>
+          {hasImage ? '🔬' : '🩺'}
+        </div>
       </div>
-      <h3 className="text-lg font-semibold text-gray-300 mb-2">
-        {hasImage ? 'Document ready' : 'Welcome to LabLens'}
+
+      <h3 style={{
+        fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '18px',
+        color: 'var(--text)', marginBottom: '8px', letterSpacing: '-0.01em'
+      }}>
+        {hasImage ? 'Document Ready' : 'Welcome to LabLens'}
       </h3>
-      <p className="text-sm text-gray-500 max-w-sm leading-relaxed">
+
+      <p style={{ fontSize: '13px', color: 'var(--text-2)', maxWidth: '360px', lineHeight: 1.6 }}>
         {hasImage
-          ? 'Ask a question or use a quick prompt on the left. LabLens will explain your document in plain English.'
+          ? 'Ask a question or pick a quick prompt on the left. LabLens will explain your document in plain English.'
           : 'Upload a lab report, prescription, or medical document to get a clear, plain-English explanation powered by Amazon Nova 2 Lite.'
         }
       </p>
+
       {hasImage && (
-        <div className="mt-6 flex flex-wrap gap-2 justify-center">
-          {['What\'s abnormal?', 'Explain in simple terms', 'What should I ask my doctor?'].map(hint => (
-            <span key={hint} className="text-xs px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-full text-gray-400">
+        <div style={{ marginTop: '24px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+          {["What's abnormal?", "Explain in simple terms", "Questions for my doctor"].map(hint => (
+            <span key={hint} style={{
+              fontSize: '11px', padding: '5px 12px',
+              background: 'var(--surface)',
+              border: '1px solid var(--border-2)',
+              borderRadius: '100px',
+              color: 'var(--text-2)'
+            }}>
               "{hint}"
             </span>
           ))}
@@ -119,7 +147,7 @@ function EmptyState({ hasImage }) {
 
 function SendIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="22" y1="2" x2="11" y2="13" />
       <polygon points="22 2 15 22 11 13 2 9 22 2" />
     </svg>
@@ -128,8 +156,8 @@ function SendIcon() {
 
 function StopIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="4" y="4" width="16" height="16" rx="2" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="4" y="4" width="16" height="16" rx="3" />
     </svg>
   );
 }

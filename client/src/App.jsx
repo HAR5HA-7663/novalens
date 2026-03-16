@@ -4,13 +4,19 @@ import ImageUploader from './components/ImageUploader.jsx';
 import ChatInterface from './components/ChatInterface.jsx';
 
 export default function App() {
-  const [image, setImage] = useState(null); // { file, preview, name }
+  const [image, setImage] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [mode, setMode] = useState('patient'); // 'patient' | 'doctor'
   const abortRef = useRef(null);
 
   const handleImageSelect = useCallback((imageData) => {
     setImage(imageData);
+    setMessages([]);
+  }, []);
+
+  const handleModeChange = useCallback((newMode) => {
+    setMode(newMode);
     setMessages([]);
   }, []);
 
@@ -23,14 +29,13 @@ export default function App() {
     setMessages(prev => [...prev, userMessage, assistantMessage]);
     setIsStreaming(true);
 
-    // Build history from previous messages (exclude current pair being added)
     const history = messages.map(m => ({ role: m.role, content: m.content }));
 
     const formData = new FormData();
     formData.append('message', messageText);
     formData.append('history', JSON.stringify(history));
+    formData.append('mode', mode);
 
-    // Only send image on first message or when a new image was just uploaded
     if (image?.file && messages.length === 0) {
       formData.append('image', image.file);
     }
@@ -80,9 +85,7 @@ export default function App() {
                     : m
                 ));
               }
-            } catch {
-              // skip malformed SSE
-            }
+            } catch { /* skip malformed SSE */ }
           }
         }
       }
@@ -101,22 +104,22 @@ export default function App() {
       ));
       abortRef.current = null;
     }
-  }, [image, messages, isStreaming]);
+  }, [image, messages, isStreaming, mode]);
 
-  const handleStop = useCallback(() => {
-    abortRef.current?.abort();
-  }, []);
-
-  const handleClear = useCallback(() => {
-    setMessages([]);
-    setImage(null);
-  }, []);
+  const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
+  const handleClear = useCallback(() => { setMessages([]); setImage(null); }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-950">
-      <Header onClear={handleClear} hasContent={messages.length > 0 || !!image} />
-      <main className="flex-1 flex flex-col lg:flex-row gap-0 max-w-7xl mx-auto w-full">
-        <div className="lg:w-2/5 xl:w-1/3 p-4 lg:p-6 border-b lg:border-b-0 lg:border-r border-gray-800">
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+      <Header
+        onClear={handleClear}
+        hasContent={messages.length > 0 || !!image}
+        mode={mode}
+        onModeChange={handleModeChange}
+      />
+      <main style={{ flex: 1, display: 'flex', maxWidth: '1400px', width: '100%', margin: '0 auto', minHeight: 0 }} className="app-main">
+        {/* Left panel */}
+        <div style={{ width: '340px', flexShrink: 0, padding: '20px', borderRight: '1px solid var(--border)', overflowY: 'auto' }} className="left-panel">
           <ImageUploader
             image={image}
             onImageSelect={handleImageSelect}
@@ -124,16 +127,25 @@ export default function App() {
             isStreaming={isStreaming}
           />
         </div>
-        <div className="flex-1 flex flex-col min-h-0">
+        {/* Right panel */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
           <ChatInterface
             messages={messages}
             onSend={handleSend}
             onStop={handleStop}
             isStreaming={isStreaming}
             hasImage={!!image}
+            mode={mode}
           />
         </div>
       </main>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .app-main { flex-direction: column !important; }
+          .left-panel { width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--border); }
+        }
+      `}</style>
     </div>
   );
 }
