@@ -71,6 +71,38 @@ Your approach:
 - Do not add unnecessary caveats about "consulting a doctor" — you are speaking to one`
 };
 
+// Medical keyword guard — runs BEFORE hitting Bedrock
+const MEDICAL_KEYWORDS = [
+  'result', 'report', 'test', 'lab', 'blood', 'urine', 'scan', 'mri', 'ct',
+  'xray', 'x-ray', 'prescription', 'medication', 'drug', 'dose', 'dosage',
+  'mg', 'ml', 'diagnosis', 'diagnos', 'symptom', 'doctor', 'physician',
+  'hospital', 'clinic', 'patient', 'treatment', 'therapy', 'surgery',
+  'level', 'count', 'normal', 'abnormal', 'high', 'low', 'range', 'value',
+  'hemoglobin', 'glucose', 'cholesterol', 'thyroid', 'kidney', 'liver',
+  'cancer', 'tumor', 'inflammation', 'infection', 'vitamin', 'iron',
+  'white blood', 'red blood', 'platelet', 'creatinine', 'sodium', 'potassium',
+  'imaging', 'radiology', 'ultrasound', 'biopsy', 'pathology', 'ecg', 'ekg',
+  'discharge', 'summary', 'notes', 'findings', 'impression', 'indicate',
+  'abnormal', 'elevated', 'deficiency', 'chronic', 'acute', 'pain',
+  'what does', 'what is', 'explain', 'understand', 'mean', 'interpret',
+  'side effect', 'should i', 'is this', 'why is', 'how long', 'how much'
+];
+
+function isMedicalMessage(message, hasImage, history) {
+  // Always allow if image is attached (first message in a session)
+  if (hasImage) return true;
+  // Always allow follow-up messages in an ongoing medical conversation
+  if (history && history.length > 0) return true;
+  // Check message for medical keywords
+  const lower = message.toLowerCase();
+  return MEDICAL_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+const OFF_TOPIC_RESPONSE = {
+  patient: "I'm only able to help with medical documents — upload a lab report or prescription and I'll explain it for you.",
+  doctor: "LabLens is a clinical document tool — please share a patient document to proceed."
+};
+
 app.post('/api/analyze', upload.single('image'), async (req, res) => {
   try {
     const { message, history, mode } = req.body;
@@ -87,6 +119,18 @@ app.post('/api/analyze', upload.single('image'), async (req, res) => {
     } catch {
       parsedHistory = [];
     }
+
+    // Off-topic guard — block before hitting Bedrock
+    if (!isMedicalMessage(message, !!req.file, parsedHistory)) {
+      const deflection = OFF_TOPIC_RESPONSE[mode === 'doctor' ? 'doctor' : 'patient'];
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.write(`data: ${JSON.stringify({ text: deflection })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      return res.end();
+    }
+
 
     // Build current user message content
     const userContent = [];
