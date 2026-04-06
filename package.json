@@ -2,17 +2,18 @@
   "name": "novalens",
   "version": "1.0.0",
   "description": "Visual Intelligence Platform powered by Amazon Nova 2 Lite",
-  "type": "module",
   "main": "server/index.js",
+  "type": "module",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "build": "cd client && npm run build",
-    "install:all": "npm install && cd client && npm install"
+    "build": "cd client && npm install && npm run build",
+    "setup": "npm install && npm run build"
   },
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.758.0",
-    "express": "^5.0.1",
-    "multer": "^2.0.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.750.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1"
   }
 }

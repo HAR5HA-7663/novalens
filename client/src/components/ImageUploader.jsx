@@ -1,134 +1,162 @@
 import { useCallback, useState } from 'react';
 
 const SUGGESTIONS = [
-  { icon: '🔬', label: 'Explain my lab results', text: 'Please explain each test result in plain English. Which values are normal, which are high or low, and what do abnormal results mean?' },
-  { icon: '💊', label: 'Explain this prescription', text: 'What is this medication for? Explain the dosage instructions and what side effects should I watch out for?' },
-  { icon: '🏥', label: "Summarize doctor's notes", text: "Summarize this medical document in simple terms. What are the key diagnoses, treatments, and what do I need to follow up on?" },
-  { icon: '⚠️', label: "What's abnormal?", text: 'Highlight anything in this report that is outside the normal range and explain what it might mean for my health.' },
-  { icon: '❓', label: 'Questions for my doctor', text: 'Based on this document, what specific questions should I ask my doctor at my next appointment?' },
-  { icon: '🩻', label: 'Explain imaging report', text: 'Translate this radiology or imaging report into plain language. What did they find and how significant is it?' }
+  { icon: '~', text: 'Describe this image in detail' },
+  { icon: '#', text: 'Extract all visible text' },
+  { icon: '%', text: 'What trends do you see?' },
+  { icon: '>', text: 'Summarize key data points' },
 ];
 
-export default function ImageUploader({ image, onImageSelect, onSuggestionClick, isStreaming }) {
+export default function ImageUploader({ currentImage, onImageSelect }) {
   const [isDragging, setIsDragging] = useState(false);
 
-  const processFile = useCallback((file) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    const preview = URL.createObjectURL(file);
-    onImageSelect({ file, preview, name: file.name });
+  const handleFile = useCallback((file) => {
+    if (!file) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowed.includes(file.type)) return;
+    if (file.size > 20 * 1024 * 1024) return;
+    onImageSelect(file);
   }, [onImageSelect]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragging(false);
-    processFile(e.dataTransfer.files[0]);
-  }, [processFile]);
-
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback(() => setIsDragging(false), []);
-
-  const handleFileInput = useCallback((e) => {
-    processFile(e.target.files[0]);
-    e.target.value = '';
-  }, [processFile]);
+    handleFile(e.dataTransfer.files[0]);
+  }, [handleFile]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
-
-      {/* Section header */}
-      <div>
-        <p className="label-upper" style={{ marginBottom: '4px' }}>Upload Document</p>
-        <p style={{ fontSize: '12px', color: 'var(--text-3)' }}>Lab reports · Prescriptions · Imaging · Doctor's notes</p>
-      </div>
-
-      {/* Drop Zone */}
-      <label
-        className={`drop-zone ${isDragging ? 'dragging' : ''} ${image ? 'has-image' : ''}`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-      >
-        <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileInput} />
-
-        {image ? (
-          <div style={{ width: '100%', padding: '12px' }}>
-            <img
-              src={image.preview}
-              alt="Uploaded"
-              style={{ width: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: '10px' }}
-            />
-            <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                {image.name}
-              </span>
-              <span style={{ fontSize: '11px', color: 'var(--lime)', fontWeight: 500, cursor: 'pointer' }}>Change</span>
-            </div>
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '24px 16px' }}>
-            <div style={{
-              width: '48px', height: '48px', borderRadius: '14px',
-              background: 'var(--lime-dim)', border: '1px solid var(--lime-border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 12px',
-              fontSize: '22px'
-            }}>
-              🩺
-            </div>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>
-              Drop your document here
-            </p>
-            <p style={{ fontSize: '12px', color: 'var(--text-3)' }}>or click to browse · JPG, PNG · max 10MB</p>
-          </div>
-        )}
-      </label>
-
-      {/* Privacy notice */}
-      <div style={{
-        display: 'flex', alignItems: 'flex-start', gap: '8px',
-        padding: '10px 12px',
-        background: 'var(--surface-2)',
-        border: '1px solid var(--border)',
-        borderLeft: '2px solid var(--lime-border)',
-        borderRadius: '10px'
-      }}>
-        <span style={{ fontSize: '13px', marginTop: '1px' }}>🔒</span>
-        <p style={{ fontSize: '11px', color: 'var(--text-3)', lineHeight: 1.5 }}>
-          Documents are processed securely and never stored. For educational purposes — always consult your doctor.
+    <div className="flex flex-col h-full p-4 gap-4">
+      {/* Section label */}
+      <div className="fade-up">
+        <h2
+          className="text-xs font-semibold tracking-widest uppercase"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          Source
+        </h2>
+        <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+          Upload an image to begin analysis
         </p>
       </div>
 
-      {/* Quick prompts */}
-      {image && (
-        <div style={{ flex: 1 }}>
-          <p className="label-upper" style={{ marginBottom: '8px' }}>Quick Prompts</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s.label}
-                onClick={() => onSuggestionClick(s.text)}
-                disabled={isStreaming}
-                className="prompt-btn"
+      {/* Drop zone */}
+      <label
+        onDrop={handleDrop}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        className={`
+          flex flex-col items-center justify-center rounded-xl cursor-pointer
+          transition-all duration-300 min-h-[160px] fade-up fade-up-delay-1
+          ${isDragging ? 'drop-active' : ''}
+        `}
+        style={{
+          border: `1.5px dashed ${isDragging ? 'var(--accent)' : 'rgba(99, 102, 241, 0.2)'}`,
+          background: isDragging ? 'rgba(99, 102, 241, 0.05)' : 'rgba(99, 102, 241, 0.02)',
+        }}
+      >
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="hidden"
+          onChange={(e) => handleFile(e.target.files[0])}
+        />
+
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center mb-3"
+          style={{ background: 'var(--accent-soft)' }}
+        >
+          <svg className="w-5 h-5" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+        </div>
+        <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+          Drop image here
+        </p>
+        <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+          or click to browse
+        </p>
+        <p
+          className="text-[10px] mt-3 px-2.5 py-1 rounded-full"
+          style={{ color: 'var(--text-muted)', background: 'var(--surface-3)' }}
+        >
+          JPEG, PNG, GIF, WebP &middot; 20MB max
+        </p>
+      </label>
+
+      {/* Image preview */}
+      {currentImage && (
+        <div className="flex flex-col gap-2 fade-up">
+          <div
+            className="relative rounded-xl overflow-hidden img-preview"
+            style={{ border: '1px solid var(--glass-border)' }}
+          >
+            <img
+              src={currentImage.preview}
+              alt="Uploaded"
+              className="w-full object-contain max-h-52"
+              style={{ background: 'var(--surface-1)' }}
+            />
+            <div
+              className="absolute bottom-0 inset-x-0 px-3 py-2"
+              style={{
+                background: 'linear-gradient(transparent, rgba(10, 13, 26, 0.9))',
+              }}
+            >
+              <p
+                className="text-[10px] truncate"
+                style={{ color: 'var(--text-secondary)', fontFamily: "'JetBrains Mono', monospace" }}
               >
-                <span style={{ fontSize: '14px', lineHeight: 1, flexShrink: 0 }}>{s.icon}</span>
-                <span className="prompt-label">{s.label}</span>
-              </button>
-            ))}
+                {currentImage.name}
+              </p>
+            </div>
           </div>
+
+          <button
+            onClick={() => onImageSelect(null)}
+            className="w-full py-2 text-[11px] font-medium rounded-lg transition-all duration-200 hover:brightness-125"
+            style={{
+              color: 'var(--text-muted)',
+              background: 'var(--surface-3)',
+              border: '1px solid transparent',
+            }}
+            onMouseEnter={(e) => e.target.style.borderColor = 'rgba(239, 68, 68, 0.3)'}
+            onMouseLeave={(e) => e.target.style.borderColor = 'transparent'}
+          >
+            Remove
+          </button>
         </div>
       )}
 
-      {!image && (
-        <div style={{ marginTop: 'auto', textAlign: 'center' }}>
-          <p style={{ fontSize: '11px', color: 'var(--text-3)' }}>
-            Upload a document to begin your analysis session
-          </p>
+      {/* Suggestions */}
+      <div className="mt-auto pt-4 fade-up fade-up-delay-2">
+        <p
+          className="text-[10px] font-semibold tracking-widest uppercase mb-2.5"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          Try asking
+        </p>
+        <div className="flex flex-col gap-1.5">
+          {SUGGESTIONS.map((s) => (
+            <div
+              key={s.text}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-200 group"
+              style={{ background: 'transparent' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-3)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              <span
+                className="text-[11px] font-bold w-4 text-center flex-shrink-0"
+                style={{ color: 'var(--accent)', fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                {s.icon}
+              </span>
+              <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                {s.text}
+              </span>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
 }

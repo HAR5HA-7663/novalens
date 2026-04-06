@@ -4,63 +4,67 @@ import ImageUploader from './components/ImageUploader.jsx';
 import ChatInterface from './components/ChatInterface.jsx';
 
 export default function App() {
-  const [image, setImage] = useState(null);
+  const [currentImage, setCurrentImage] = useState(null);
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [mode, setMode] = useState('patient'); // 'patient' | 'doctor'
   const abortRef = useRef(null);
 
-  const handleImageSelect = useCallback((imageData) => {
-    setImage(imageData);
+  const handleImageSelect = useCallback((file) => {
+    if (!file) {
+      setCurrentImage(null);
+      setMessages([]);
+      return;
+    }
+    const preview = URL.createObjectURL(file);
+    setCurrentImage({ file, preview, name: file.name });
     setMessages([]);
   }, []);
 
-  const handleModeChange = useCallback((newMode) => {
-    setMode(newMode);
-    setMessages([]);
-  }, []);
+  const handleSendMessage = useCallback(async (userText) => {
+    if (isStreaming) return;
 
-  const handleSend = useCallback(async (messageText) => {
-    if (!messageText.trim() || isStreaming) return;
-
-    const userMessage = { role: 'user', content: messageText, id: Date.now() };
-    const assistantMessage = { role: 'assistant', content: '', id: Date.now() + 1, streaming: true };
-
-    setMessages(prev => [...prev, userMessage, assistantMessage]);
+    const userMsg = {
+      role: 'user',
+      content: userText,
+      imagePreview: currentImage?.preview,
+      timestamp: Date.now(),
+    };
+    setMessages(prev => [...prev, userMsg]);
     setIsStreaming(true);
 
-    const history = messages.map(m => ({ role: m.role, content: m.content }));
-
-    const formData = new FormData();
-    formData.append('message', messageText);
-    formData.append('history', JSON.stringify(history));
-    formData.append('mode', mode);
-
-    if (image?.file && messages.length === 0) {
-      formData.append('image', image.file);
-    }
+    const assistantMsg = { role: 'assistant', content: '', streaming: true, timestamp: Date.now() };
+    setMessages(prev => [...prev, assistantMsg]);
 
     try {
-      const controller = new AbortController();
-      abortRef.current = controller;
+      const formData = new FormData();
+      formData.append('message', userText);
 
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Request failed');
+      if (currentImage?.file) {
+        formData.append('image', currentImage.file);
       }
 
-      const reader = response.body.getReader();
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
+      formData.append('history', JSON.stringify(history));
+
+      abortRef.current = new AbortController();
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+        signal: abortRef.current.signal,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || `Server error: ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let fullText = '';
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { value, done } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -68,84 +72,109 @@ export default function App() {
         buffer = lines.pop();
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.text) {
-                setMessages(prev => prev.map(m =>
-                  m.id === assistantMessage.id
-                    ? { ...m, content: m.content + data.text }
-                    : m
-                ));
-              }
-              if (data.done || data.error) {
-                setMessages(prev => prev.map(m =>
-                  m.id === assistantMessage.id
-                    ? { ...m, streaming: false, error: data.error }
-                    : m
-                ));
-              }
-            } catch { /* skip malformed SSE */ }
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.type === 'delta') {
+              fullText += data.text;
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: fullText,
+                };
+                return updated;
+              });
+            }
+
+            if (data.type === 'done') {
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: fullText,
+                  streaming: false,
+                };
+                return updated;
+              });
+            }
+
+            if (data.type === 'error') {
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  content: `Something went wrong: ${data.error}`,
+                  streaming: false,
+                  error: true,
+                };
+                return updated;
+              });
+            }
+          } catch (e) {
+            // skip malformed SSE lines
           }
         }
       }
+
+      // finalize if stream ended without explicit done event
+      setMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.streaming) {
+          updated[updated.length - 1] = { ...last, streaming: false };
+        }
+        return updated;
+      });
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setMessages(prev => prev.map(m =>
-          m.id === assistantMessage.id
-            ? { ...m, content: `Error: ${err.message}`, streaming: false, error: true }
-            : m
-        ));
+        setMessages(prev => {
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last?.role === 'assistant') {
+            updated[updated.length - 1] = {
+              ...last,
+              content: last.content || `Failed to get response: ${err.message}`,
+              streaming: false,
+              error: true,
+            };
+          }
+          return updated;
+        });
       }
     } finally {
       setIsStreaming(false);
-      setMessages(prev => prev.map(m =>
-        m.id === assistantMessage.id ? { ...m, streaming: false } : m
-      ));
-      abortRef.current = null;
     }
-  }, [image, messages, isStreaming, mode]);
-
-  const handleStop = useCallback(() => { abortRef.current?.abort(); }, []);
-  const handleClear = useCallback(() => { setMessages([]); setImage(null); }, []);
+  }, [isStreaming, currentImage, messages]);
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      <Header
-        onClear={handleClear}
-        hasContent={messages.length > 0 || !!image}
-        mode={mode}
-        onModeChange={handleModeChange}
-      />
-      <main style={{ flex: 1, display: 'flex', maxWidth: '1400px', width: '100%', margin: '0 auto', minHeight: 0 }} className="app-main">
-        {/* Left panel */}
-        <div style={{ width: '340px', flexShrink: 0, padding: '20px', borderRight: '1px solid var(--border)', overflowY: 'auto' }} className="left-panel">
+    <div className="flex flex-col h-screen overflow-hidden" style={{ background: 'var(--surface-1)' }}>
+      <div className="noise-overlay" />
+      <Header />
+      <div className="flex flex-1 overflow-hidden">
+        <aside
+          className="w-80 flex-shrink-0 flex flex-col overflow-y-auto"
+          style={{
+            background: 'var(--surface-2)',
+            borderRight: '1px solid var(--glass-border)',
+          }}
+        >
           <ImageUploader
-            image={image}
+            currentImage={currentImage}
             onImageSelect={handleImageSelect}
-            onSuggestionClick={handleSend}
-            isStreaming={isStreaming}
           />
-        </div>
-        {/* Right panel */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
+        </aside>
+
+        <main className="flex-1 flex flex-col min-w-0 lens-glow">
           <ChatInterface
             messages={messages}
-            onSend={handleSend}
-            onStop={handleStop}
             isStreaming={isStreaming}
-            hasImage={!!image}
-            mode={mode}
+            onSendMessage={handleSendMessage}
+            hasImage={!!currentImage}
           />
-        </div>
-      </main>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .app-main { flex-direction: column !important; }
-          .left-panel { width: 100% !important; border-right: none !important; border-bottom: 1px solid var(--border); }
-        }
-      `}</style>
+        </main>
+      </div>
     </div>
   );
 }
