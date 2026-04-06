@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import MessageBubble from './MessageBubble.jsx';
 
-export default function ChatInterface({ messages, onSend, onStop, isStreaming, hasImage }) {
+export default function ChatInterface({ messages, isStreaming, onSendMessage, hasImage }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -10,154 +10,152 @@ export default function ChatInterface({ messages, onSend, onStop, isStreaming, h
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSubmit = useCallback((e) => {
-    e?.preventDefault();
-    if (!input.trim() || isStreaming) return;
-    onSend(input.trim());
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || isStreaming) return;
     setInput('');
-    if (textareaRef.current) textareaRef.current.style.height = '48px';
-  }, [input, isStreaming, onSend]);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '44px';
+    }
+    onSendMessage(text);
+  };
 
-  const handleKeyDown = useCallback((e) => {
+  const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      handleSubmit(e);
     }
-  }, [handleSubmit]);
+  };
 
   const isEmpty = messages.length === 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-
+    <div className="flex flex-col h-full relative">
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 24px 16px' }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {isEmpty ? (
-            <EmptyState hasImage={hasImage} />
-          ) : (
-            messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center h-full text-center gap-5">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center fade-up"
+              style={{
+                background: 'var(--accent-soft)',
+                boxShadow: '0 0 40px rgba(99, 102, 241, 0.15)',
+              }}
+            >
+              <svg className="w-7 h-7" style={{ color: 'var(--accent)' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div className="fade-up fade-up-delay-1">
+              <h3
+                className="text-base font-semibold mb-1.5"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {hasImage ? 'Image loaded. Ask away.' : 'Upload an image to start'}
+              </h3>
+              <p
+                className="text-xs max-w-xs leading-relaxed"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                {hasImage
+                  ? 'Ask questions about charts, documents, diagrams, screenshots, or any visual content. Nova will analyze and respond in real time.'
+                  : 'Drag and drop an image on the left panel, then ask NovaLens anything about what you see.'}
+              </p>
+            </div>
+
+            {hasImage && (
+              <div className="flex flex-wrap gap-2 mt-2 fade-up fade-up-delay-2">
+                {['What do you see?', 'Extract text', 'Analyze trends'].map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => onSendMessage(q)}
+                    className="px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-all duration-200 hover:brightness-125"
+                    style={{
+                      background: 'var(--accent-soft)',
+                      color: 'var(--accent)',
+                      border: '1px solid rgba(99, 102, 241, 0.2)',
+                    }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-5 max-w-3xl mx-auto">
+            {messages.map((msg, i) => (
+              <MessageBubble key={`${msg.timestamp}-${i}`} message={msg} />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
       </div>
 
-      {/* Input bar */}
-      <div style={{
-        borderTop: '1px solid var(--border)',
-        padding: '16px 24px 20px',
-        background: 'var(--bg)'
-      }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={hasImage ? 'Ask about your medical document...' : 'Upload a document to begin...'}
-              disabled={!hasImage && isEmpty}
-              rows={1}
-              className="chat-input"
-              onInput={(e) => {
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+      {/* Input */}
+      <div
+        className="flex-shrink-0 px-6 py-4"
+        style={{
+          background: 'linear-gradient(transparent, var(--surface-1) 30%)',
+        }}
+      >
+        <div className="max-w-3xl mx-auto">
+          <form onSubmit={handleSubmit} className="flex gap-2.5 items-end">
+            <div
+              className="flex-1 rounded-xl overflow-hidden transition-all duration-200"
+              style={{
+                background: 'var(--surface-2)',
+                border: '1px solid var(--glass-border)',
               }}
-            />
-
-            {isStreaming ? (
-              <button type="button" onClick={onStop} className="stop-btn" title="Stop">
-                <StopIcon />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!input.trim() || (!hasImage && isEmpty)}
-                className="send-btn"
-                title="Send"
-              >
-                <SendIcon />
-              </button>
-            )}
+            >
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={hasImage ? 'Ask about this image...' : 'Upload an image first'}
+                disabled={!hasImage || isStreaming}
+                rows={1}
+                className="w-full bg-transparent px-4 py-3 text-sm resize-none focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed placeholder-[var(--text-muted)]"
+                style={{
+                  color: 'var(--text-primary)',
+                  minHeight: '44px',
+                  maxHeight: '120px',
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}
+                onInput={(e) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                }}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!hasImage || !input.trim() || isStreaming}
+              className="btn-primary flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white"
+            >
+              {isStreaming ? (
+                <span
+                  className="w-4 h-4 rounded-full border-2 animate-spin"
+                  style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'white' }}
+                />
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18" />
+                </svg>
+              )}
+            </button>
           </form>
-
-          <p style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '8px', textAlign: 'center' }}>
-            Enter to send · Shift+Enter for new line
+          <p
+            className="text-[10px] mt-2 text-center"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Enter to send &middot; Shift+Enter for new line
           </p>
         </div>
       </div>
     </div>
-  );
-}
-
-function EmptyState({ hasImage }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '320px', textAlign: 'center', padding: '40px 24px' }}>
-
-      {/* Decorative ring */}
-      <div style={{
-        width: '72px', height: '72px', borderRadius: '50%',
-        border: '1.5px solid var(--border-2)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginBottom: '20px', position: 'relative'
-      }}>
-        <div style={{
-          width: '48px', height: '48px', borderRadius: '50%',
-          background: hasImage ? 'var(--lime-dim)' : 'var(--surface)',
-          border: `1.5px solid ${hasImage ? 'var(--lime-border)' : 'var(--border-2)'}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '22px'
-        }}>
-          {hasImage ? '🔬' : '🩺'}
-        </div>
-      </div>
-
-      <h3 style={{
-        fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '18px',
-        color: 'var(--text)', marginBottom: '8px', letterSpacing: '-0.01em'
-      }}>
-        {hasImage ? 'Document Ready' : 'Welcome to LabLens'}
-      </h3>
-
-      <p style={{ fontSize: '13px', color: 'var(--text-2)', maxWidth: '360px', lineHeight: 1.6 }}>
-        {hasImage
-          ? 'Ask a question or pick a quick prompt on the left. LabLens will explain your document in plain English.'
-          : 'Upload a lab report, prescription, or medical document to get a clear, plain-English explanation powered by Amazon Nova 2 Lite.'
-        }
-      </p>
-
-      {hasImage && (
-        <div style={{ marginTop: '24px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-          {["What's abnormal?", "Explain in simple terms", "Questions for my doctor"].map(hint => (
-            <span key={hint} style={{
-              fontSize: '11px', padding: '5px 12px',
-              background: 'var(--surface)',
-              border: '1px solid var(--border-2)',
-              borderRadius: '100px',
-              color: 'var(--text-2)'
-            }}>
-              "{hint}"
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="4" y="4" width="16" height="16" rx="3" />
-    </svg>
   );
 }

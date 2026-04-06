@@ -1,95 +1,78 @@
-# NovaLens — Visual Intelligence Platform
+# NovaLens - Visual Intelligence Platform
 
-Upload images and have intelligent multi-turn conversations powered by **Amazon Nova 2 Lite** on AWS Bedrock.
+NovaLens is a multi-turn visual analysis platform powered by **Amazon Nova 2 Lite** on AWS Bedrock. Upload any image — charts, diagrams, screenshots, documents, or photos — and have an intelligent conversation about what you see.
 
-## What It Does
+## Features
 
-NovaLens lets you upload any image — charts, dashboards, documents, diagrams, screenshots — and ask questions about it in natural language. Responses stream in real-time via Server-Sent Events.
+- **Multi-turn conversations** — Ask follow-up questions and dig deeper into details
+- **Drag-and-drop uploads** — Intuitive image ingestion with live preview
+- **Real-time streaming** — Responses stream token-by-token via Server-Sent Events
+- **Enterprise-ready use cases** — Data analysis, document review, diagram comprehension
+- **Multiple image formats** — JPEG, PNG, GIF, WebP up to 20MB
 
-**Use Cases:**
-- Enterprise analysts interrogating chart data without specialized tools
-- Researchers summarizing figure content from papers
-- Support teams processing screenshot bug reports
-- Educators analyzing diagram-based content
+## Architecture
+
+```
+Browser (React 19 + Vite + Tailwind CSS)
+       | HTTP + SSE
+Express.js (Node.js)
+       | AWS SDK v3
+Amazon Nova 2 Lite (Bedrock, us-east-1)
+```
+
+## Quick Start
+
+```bash
+# Install everything and build frontend
+npm run setup
+
+# Start the server
+npm start
+# -> http://localhost:3000
+```
+
+Requires AWS credentials with Bedrock access configured via `aws configure` or IAM role.
 
 ## Tech Stack
 
-- **Backend:** Node.js 22, Express 5, AWS SDK v3, Multer 2
-- **Frontend:** React 19, Vite 6, Tailwind CSS
-- **AI:** Amazon Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`) via AWS Bedrock
-- **Deploy:** EC2 + PM2
+- **Runtime**: Node.js
+- **Backend**: Express.js, AWS SDK v3 (`@aws-sdk/client-bedrock-runtime`)
+- **Frontend**: React 19, Vite, Tailwind CSS
+- **AI Model**: Amazon Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`)
+- **Deployment**: AWS EC2
 
-## Local Development
+## Project Structure
 
-### Prerequisites
-- Node.js 22+
-- AWS credentials with Bedrock access in `us-east-1`
-
-### Setup
-
-```bash
-# Install dependencies
-npm install
-cd client && npm install && cd ..
-
-# Build frontend
-cd client && npm run build && cd ..
-
-# Start server
-npm start
+```
+novalens/
+├── server/
+│   └── index.js           # Express + Bedrock streaming API
+├── client/
+│   ├── src/
+│   │   ├── App.jsx         # Root state management + SSE reader
+│   │   └── components/     # Header, ImageUploader, Chat, Messages
+│   ├── index.html
+│   └── vite.config.js
+└── deploy/
+    └── userdata.sh         # EC2 bootstrap script
 ```
 
-Open http://localhost:3000
+## How It Works
 
-### Development Mode
+1. User uploads an image (drag-and-drop or file picker)
+2. User asks a question about the image in the chat interface
+3. The image is base64-encoded and sent alongside the text query to Amazon Nova 2 Lite via AWS Bedrock
+4. Nova analyzes the visual content and streams back a response using SSE
+5. Users can ask follow-up questions in the same conversation with full context retention
 
-```bash
-# Terminal 1: Start backend
-npm run dev
+## Deployment
 
-# Terminal 2: Start frontend with hot reload
-cd client && npm run dev
-```
-
-Frontend dev server runs on http://localhost:5173 with proxy to backend.
-
-## AWS Configuration
-
-The app uses the AWS SDK default credential chain. On EC2, it uses the instance IAM role. Locally, configure with:
-
-```bash
-aws configure
-# or set environment variables:
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_DEFAULT_REGION=us-east-1
-```
-
-Required IAM permissions:
-```json
-{
-  "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-  "Resource": "*"
-}
-```
-
-## API
-
-### `GET /api/health`
-Returns server status.
-
-### `POST /api/analyze`
-Analyzes an image with a text query.
-
-**Form fields:**
-- `image` (file, optional after first message): Image file
-- `message` (string, required): User's question
-- `history` (JSON string): Array of `{role, content}` previous messages
-
-**Response:** Server-Sent Events stream with `data: {"text": "..."}` chunks, ending with `data: {"done": true}`.
+The `deploy/userdata.sh` script automates EC2 setup:
+- Installs Node.js and PM2
+- Clones the repo and builds the frontend
+- Starts the server with PM2 process management
+- Redirects port 80 to 3000 via iptables
 
 ## Hackathon
 
-**Amazon Nova AI Hackathon** — Multimodal Understanding category
-
-Built with Amazon Nova 2 Lite accessed via AWS Bedrock inference profiles for real-time multimodal visual intelligence.
+Built for the **Amazon Nova AI Hackathon** — Multimodal Understanding category.

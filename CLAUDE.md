@@ -1,37 +1,44 @@
-# NovaLens — CLAUDE.md
+# CLAUDE.md - NovaLens
 
 ## Project Overview
-NovaLens is a multimodal visual intelligence platform for the Amazon Nova AI Hackathon (Multimodal Understanding category). Users upload images and have multi-turn conversations powered by Amazon Nova 2 Lite.
+NovaLens: Visual Intelligence Platform using Amazon Nova 2 Lite on AWS Bedrock.
+Multi-turn image analysis chat app. Node.js backend, React frontend.
 
-## Critical Technical Notes
+## Quick Commands
+```bash
+npm run setup    # install deps + build frontend
+npm start        # start server on :3000
+npm run dev      # dev mode with file watching
+```
 
-### Amazon Nova 2 Lite API
-- **Model ID:** `us.amazon.nova-2-lite-v1:0` (inference profile — NOT foundation model ID)
-- **Bedrock Region:** `us-east-1` (inference profiles are us-east-1 only)
-- **Schema version:** `messages-v1` (NOT `anthropic_version`)
-- **Token param:** `max_new_tokens` (NOT `max_tokens`)
-- **Streaming event path:** `decoded.contentBlockDelta.delta.text`
-- **End signal:** `decoded.messageStop`
+## Architecture
+- `server/index.js` — Express server, Bedrock streaming, multer uploads
+- `client/` — React 19 + Vite + Tailwind CSS
+- `deploy/userdata.sh` — EC2 bootstrap
 
-### Image Handling
-- Images are sent as base64 in the first message only
-- Subsequent messages use text-only content (history carries context)
-- The image `bytes` field takes base64 string (not Buffer)
-
-### EC2 Infrastructure
-- Region: us-east-2 (EC2), us-east-1 (Bedrock)
-- VPC: vpc-0c759af7a4181c58c
-- Subnet: subnet-000bab9b048ac52ae
-- Key Pair: n8n-key-pair
-- IAM Role: novalens-ec2-role (needs bedrock:InvokeModel, bedrock:InvokeModelWithResponseStream)
-- Port routing: iptables 80 → 3000
-
-### GitHub
-- Repo: https://github.com/HAR5HA-7663/novalens
+## Key Technical Details
+- Model ID: `us.amazon.nova-2-lite-v1:0` (inference profile, NOT foundation model ID)
+- Bedrock region: `us-east-1`
+- Schema: `schemaVersion: 'messages-v1'`
+- Max tokens key: `max_new_tokens` (not `max_tokens`)
+- Streaming events: `contentBlockDelta.delta.text` for chunks, `messageStop` for end
+- Image format: `{ image: { format, source: { bytes: base64 } } }` — image before text in content array
 
 ## Lessons Learned
-- Always use inference profile IDs (prefixed with `us.`) for Nova models — foundation model IDs fail
-- Bedrock streaming chunks come via `chunk.chunk.bytes` as Uint8Array, decode with Buffer.from().toString('utf-8')
-- Express 5 handles async errors natively, no need for express-async-errors
-- Multer 2 with memoryStorage works well for base64 conversion
-- Tailwind CSS v4 uses `@tailwind base/components/utilities` (not `@import "tailwindcss"`)
+<!-- This section gets updated as issues are discovered and fixed -->
+
+### API Issues
+- Nova 2 Lite ONLY works via inference profiles. Using raw foundation model ID gives ValidationException.
+- Must use `us.amazon.nova-2-lite-v1:0` not `amazon.nova-2-lite-v1:0`
+
+### Frontend
+- Tailwind v3 uses `@tailwind base/components/utilities`, v4 uses `@import "tailwindcss"`
+- Using Tailwind v3.4 with PostCSS for stability
+
+### Deployment
+- EC2 needs IAM instance profile with bedrock:InvokeModel and bedrock:InvokeModelWithResponseStream
+- Port 80 redirect via iptables (avoids running node as root)
+- PM2 for process management and auto-restart
+
+## Recurring Issues & Fixes
+<!-- Add patterns here when the same problem appears more than once -->

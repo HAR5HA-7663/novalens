@@ -1,124 +1,90 @@
 export default function MessageBubble({ message }) {
   const isUser = message.role === 'user';
-  const isError = message.error;
 
   return (
-    <div className="message-enter" style={{ display: 'flex', gap: '10px', flexDirection: isUser ? 'row-reverse' : 'row' }}>
+    <div className={`flex gap-3 msg-enter ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       {/* Avatar */}
-      <div style={{
-        flexShrink: 0,
-        width: '28px', height: '28px',
-        borderRadius: '8px',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        marginTop: '2px',
-        fontSize: '12px', fontWeight: 700,
-        fontFamily: 'Syne, sans-serif',
-        background: isUser
-          ? 'var(--lime)'
-          : isError
-          ? 'rgba(255,60,60,0.15)'
-          : 'var(--surface-2)',
-        border: isUser
-          ? 'none'
-          : isError
-          ? '1px solid rgba(255,60,60,0.3)'
-          : '1px solid var(--border-2)',
-        color: isUser ? '#000' : isError ? '#ff6060' : 'var(--text-2)'
-      }}>
-        {isUser ? 'U' : isError ? '!' : '⬡'}
-      </div>
-
-      {/* Bubble */}
-      <div style={{ maxWidth: '78%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-        <div style={{
-          padding: '10px 14px',
-          borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
-          fontSize: '13px',
-          lineHeight: '1.65',
+      <div
+        className="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center text-[10px] font-bold tracking-wide mt-0.5"
+        style={{
           background: isUser
-            ? 'var(--lime)'
-            : isError
-            ? 'rgba(255,60,60,0.06)'
-            : 'var(--surface)',
-          border: isUser
-            ? 'none'
-            : isError
-            ? '1px solid rgba(255,60,60,0.2)'
-            : '1px solid var(--border)',
-          color: isUser ? '#000' : isError ? '#ff8080' : 'var(--text)',
-          fontWeight: isUser ? 500 : 400,
-        }}>
-          {message.content ? (
-            <FormattedText text={message.content} isUser={isUser} />
-          ) : message.streaming ? (
-            <span className="typing-cursor" style={{ color: 'var(--text-3)' }}> </span>
-          ) : null}
-        </div>
+            ? 'linear-gradient(135deg, #6366f1, #4338ca)'
+            : 'var(--surface-3)',
+          color: isUser ? 'white' : 'var(--text-secondary)',
+          boxShadow: isUser ? '0 0 12px rgba(99, 102, 241, 0.25)' : 'none',
+        }}
+      >
+        {isUser ? 'U' : 'NL'}
+      </div>
+
+      <div className={`flex flex-col gap-2 max-w-[80%] ${isUser ? 'items-end' : 'items-start'}`}>
+        {/* Image thumbnail */}
+        {message.imagePreview && isUser && (
+          <div
+            className="rounded-lg overflow-hidden max-w-[200px]"
+            style={{ border: '1px solid var(--glass-border)' }}
+          >
+            <img
+              src={message.imagePreview}
+              alt="Attached"
+              className="w-full object-contain max-h-32"
+              style={{ background: 'var(--surface-1)' }}
+            />
+          </div>
+        )}
+
+        {/* Text */}
+        {message.content && (
+          <div
+            className={`
+              px-4 py-3 text-[13px] leading-relaxed whitespace-pre-wrap
+              ${isUser ? 'rounded-2xl rounded-tr-md' : 'rounded-2xl rounded-tl-md'}
+              ${message.streaming ? 'cursor-blink' : ''}
+            `}
+            style={{
+              background: isUser
+                ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(67, 56, 202, 0.9))'
+                : 'var(--surface-3)',
+              color: isUser ? 'white' : 'var(--text-primary)',
+              border: isUser ? 'none' : '1px solid var(--glass-border)',
+              boxShadow: isUser
+                ? '0 2px 12px rgba(99, 102, 241, 0.2)'
+                : '0 1px 4px rgba(0, 0, 0, 0.15)',
+              ...(message.error ? {
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#fca5a5',
+              } : {}),
+              fontFamily: isUser ? "'DM Sans', system-ui, sans-serif" : "'DM Sans', system-ui, sans-serif",
+            }}
+          >
+            {message.content}
+          </div>
+        )}
+
+        {/* Streaming skeleton */}
+        {message.streaming && !message.content && (
+          <div
+            className="px-4 py-3 rounded-2xl rounded-tl-md flex items-center gap-1.5"
+            style={{
+              background: 'var(--surface-3)',
+              border: '1px solid var(--glass-border)',
+            }}
+          >
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="w-1.5 h-1.5 rounded-full animate-bounce"
+                style={{
+                  background: 'var(--accent)',
+                  animationDelay: `${i * 0.15}s`,
+                  animationDuration: '0.8s',
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
-}
-
-function FormattedText({ text, isUser }) {
-  const lines = text.split('\n');
-  const accent = isUser ? 'rgba(0,0,0,0.5)' : 'var(--lime)';
-  const numColor = isUser ? 'rgba(0,0,0,0.6)' : 'var(--orange)';
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-      {lines.map((line, i) => {
-        if (line.startsWith('### ')) {
-          return <p key={i} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '13px', marginTop: '10px', color: isUser ? '#000' : 'var(--lime)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{line.slice(4)}</p>;
-        }
-        if (line.startsWith('## ')) {
-          return <p key={i} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '14px', marginTop: '8px', color: isUser ? '#000' : 'var(--text)' }}>{line.slice(3)}</p>;
-        }
-        if (line.startsWith('# ')) {
-          return <p key={i} style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '16px', marginTop: '8px' }}>{line.slice(2)}</p>;
-        }
-        if (line.startsWith('---')) {
-          return <hr key={i} style={{ border: 'none', borderTop: '1px solid var(--border-2)', margin: '6px 0' }} />;
-        }
-        if (line.startsWith('- ') || line.startsWith('* ')) {
-          return (
-            <div key={i} style={{ display: 'flex', gap: '8px' }}>
-              <span style={{ color: accent, marginTop: '2px', flexShrink: 0 }}>•</span>
-              <span>{formatInline(line.slice(2), isUser)}</span>
-            </div>
-          );
-        }
-        if (/^\d+\. /.test(line)) {
-          const match = line.match(/^(\d+)\. (.*)/);
-          return (
-            <div key={i} style={{ display: 'flex', gap: '8px' }}>
-              <span style={{ color: numColor, fontFamily: 'DM Mono, monospace', fontSize: '11px', marginTop: '2px', minWidth: '14px', flexShrink: 0 }}>{match[1]}.</span>
-              <span>{formatInline(match[2], isUser)}</span>
-            </div>
-          );
-        }
-        if (line === '') return <div key={i} style={{ height: '4px' }} />;
-        return <p key={i}>{formatInline(line, isUser)}</p>;
-      })}
-    </div>
-  );
-}
-
-function formatInline(text, isUser) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} style={{ fontWeight: 600 }}>{part.slice(2, -2)}</strong>;
-    }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code key={i} style={{
-          background: isUser ? 'rgba(0,0,0,0.15)' : 'var(--surface-2)',
-          border: `1px solid ${isUser ? 'rgba(0,0,0,0.1)' : 'var(--border-2)'}`,
-          padding: '1px 5px', borderRadius: '4px',
-          fontSize: '11px', fontFamily: 'DM Mono, monospace'
-        }}>{part.slice(1, -1)}</code>
-      );
-    }
-    return part;
-  });
 }

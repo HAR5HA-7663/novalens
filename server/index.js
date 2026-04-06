@@ -1,205 +1,128 @@
 import express from 'express';
+import cors from 'cors';
 import multer from 'multer';
-import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
-import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import {
+  BedrockRuntimeClient,
+  InvokeModelWithResponseStreamCommand,
+} from '@aws-sdk/client-bedrock-runtime';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const app = express();
-const PORT = process.env.PORT || 3000;
 
 const MODEL_ID = 'us.amazon.nova-2-lite-v1:0';
+
 const bedrock = new BedrockRuntimeClient({ region: 'us-east-1' });
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     cb(null, allowed.includes(file.mimetype));
-  }
+  },
 });
 
-app.use(express.json());
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '1mb' }));
 
-// Serve React build
-const clientDist = join(__dirname, '../client/dist');
-if (existsSync(clientDist)) {
-  app.use(express.static(clientDist));
-}
+app.use(express.static(join(__dirname, '../client/dist')));
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', model: MODEL_ID, timestamp: new Date().toISOString() });
-});
-
-const SYSTEM_PROMPTS = {
-  patient: `You are LabLens, a medical document assistant. Help patients understand their medical reports, lab results, prescriptions, and health documents.
-
-Your audience has the medical document in front of them — they already know they have a health issue or test result. Do NOT explain from scratch what a "blood test" is or condescend. They are intelligent adults who simply don't know medical jargon.
-
-Your approach:
-- Skip the basics. They know what a "CBC" is called; they don't know what the numbers mean.
-- Translate jargon into plain English: "Your hemoglobin is low" not "Hemoglobin is a protein in red blood cells that..."
-- Flag values that are HIGH or LOW clearly and say what it might mean in practical terms
-- Be warm and reassuring — not clinical, not robotic
-- For prescriptions: explain what the drug does, dosage in plain terms, and what side effects actually feel like
-- Always end with 2-3 specific questions they should ask their doctor
-- Do NOT give diagnoses. Say "this could indicate" or "your doctor may want to check for"
-- Keep responses focused and scannable — use bullet points for abnormal values`,
-
-  doctor: `You are LabLens, a clinical decision support tool for medical professionals reviewing patient documents.
-
-Your audience is a licensed physician, nurse practitioner, or medical professional. Communicate at a peer level.
-
-Your approach:
-- Use precise clinical terminology: ICD codes where relevant, proper drug names (generic + brand), standard lab reference ranges
-- Flag clinically significant findings with differential considerations
-- For lab results: note deviations in standard units, flag critical values, suggest relevant follow-up investigations
-- For imaging reports: interpret radiological findings using proper anatomical and pathological terminology
-- For prescriptions: note drug class, mechanism, relevant interactions, contraindications to watch for
-- Suggest evidence-based next steps and relevant clinical guidelines where applicable
-- Be concise and structured — clinicians need fast, dense, accurate information
-- Do not add unnecessary caveats about "consulting a doctor" — you are speaking to one`
-};
-
-// Medical keyword guard — runs BEFORE hitting Bedrock
-const MEDICAL_KEYWORDS = [
-  'result', 'report', 'test', 'lab', 'blood', 'urine', 'scan', 'mri', 'ct',
-  'xray', 'x-ray', 'prescription', 'medication', 'drug', 'dose', 'dosage',
-  'mg', 'ml', 'diagnosis', 'diagnos', 'symptom', 'doctor', 'physician',
-  'hospital', 'clinic', 'patient', 'treatment', 'therapy', 'surgery',
-  'level', 'count', 'normal', 'abnormal', 'high', 'low', 'range', 'value',
-  'hemoglobin', 'glucose', 'cholesterol', 'thyroid', 'kidney', 'liver',
-  'cancer', 'tumor', 'inflammation', 'infection', 'vitamin', 'iron',
-  'white blood', 'red blood', 'platelet', 'creatinine', 'sodium', 'potassium',
-  'imaging', 'radiology', 'ultrasound', 'biopsy', 'pathology', 'ecg', 'ekg',
-  'discharge', 'summary', 'notes', 'findings', 'impression', 'indicate',
-  'abnormal', 'elevated', 'deficiency', 'chronic', 'acute', 'pain',
-  'what does', 'what is', 'explain', 'understand', 'mean', 'interpret',
-  'side effect', 'should i', 'is this', 'why is', 'how long', 'how much'
-];
-
-function isMedicalMessage(message, hasImage, history) {
-  // Always allow if image is attached (first message in a session)
-  if (hasImage) return true;
-  // Always allow follow-up messages in an ongoing medical conversation
-  if (history && history.length > 0) return true;
-  // Check message for medical keywords
-  const lower = message.toLowerCase();
-  return MEDICAL_KEYWORDS.some(kw => lower.includes(kw));
-}
-
-const OFF_TOPIC_RESPONSE = {
-  patient: "I'm only able to help with medical documents — upload a lab report or prescription and I'll explain it for you.",
-  doctor: "LabLens is a clinical document tool — please share a patient document to proceed."
-};
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: MODEL_ID }));
 
 app.post('/api/analyze', upload.single('image'), async (req, res) => {
   try {
-    const { message, history, mode } = req.body;
+    const { message, history } = req.body;
     const imageFile = req.file;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Build conversation history
-    let parsedHistory = [];
-    try {
-      parsedHistory = JSON.parse(history || '[]');
-    } catch {
-      parsedHistory = [];
-    }
+    const parsedHistory = history ? JSON.parse(history) : [];
+    const messages = [];
 
-    // Off-topic guard — block before hitting Bedrock
-    if (!isMedicalMessage(message, !!req.file, parsedHistory)) {
-      const deflection = OFF_TOPIC_RESPONSE[mode === 'doctor' ? 'doctor' : 'patient'];
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-      res.write(`data: ${JSON.stringify({ text: deflection })}\n\n`);
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      return res.end();
-    }
-
-
-    // Build current user message content
-    const userContent = [];
-
-    // Add image if provided
-    if (imageFile) {
-      const base64Image = imageFile.buffer.toString('base64');
-      const mimeType = imageFile.mimetype;
-      const format = mimeType === 'image/png' ? 'png'
-        : mimeType === 'image/gif' ? 'gif'
-        : mimeType === 'image/webp' ? 'webp'
-        : 'jpeg';
-
-      userContent.push({
-        image: {
-          format,
-          source: { bytes: base64Image }
-        }
+    for (const turn of parsedHistory) {
+      messages.push({
+        role: turn.role,
+        content: [{ text: turn.content }],
       });
     }
 
-    userContent.push({ text: message });
+    const currentContent = [];
 
-    // Build messages array with history
-    const messages = [];
-
-    // Add history (filter to valid roles)
-    for (const msg of parsedHistory) {
-      if (msg.role === 'user' || msg.role === 'assistant') {
-        messages.push({
-          role: msg.role,
-          content: [{ text: msg.content }]
-        });
-      }
+    if (imageFile) {
+      const base64Image = imageFile.buffer.toString('base64');
+      const mimeToFormat = {
+        'image/jpeg': 'jpeg',
+        'image/png': 'png',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+      };
+      currentContent.push({
+        image: {
+          format: mimeToFormat[imageFile.mimetype] || 'jpeg',
+          source: {
+            bytes: base64Image,
+          },
+        },
+      });
     }
 
-    // Add current user message
-    messages.push({ role: 'user', content: userContent });
+    currentContent.push({ text: message });
+
+    messages.push({
+      role: 'user',
+      content: currentContent,
+    });
 
     const requestBody = {
       schemaVersion: 'messages-v1',
       messages,
-      system: [{
-        text: SYSTEM_PROMPTS[mode === 'doctor' ? 'doctor' : 'patient']
-      }],
+      system: [
+        {
+          text: `You are NovaLens, an expert visual intelligence assistant. Analyze images with precision and provide detailed, actionable insights. For charts and graphs, extract key data points and trends. For documents, summarize key information. For diagrams, explain the structure and relationships. For screenshots, describe what you see and identify UI elements, errors, or notable details. Be concise, clear, and professional. Use markdown formatting when helpful.`,
+        },
+      ],
       inferenceConfig: {
-        max_new_tokens: 1024,
-        temperature: 0.7
-      }
+        max_new_tokens: 2048,
+        temperature: 0.7,
+        top_p: 0.9,
+      },
     };
 
-    // Set SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
 
     const command = new InvokeModelWithResponseStreamCommand({
       modelId: MODEL_ID,
       contentType: 'application/json',
       accept: 'application/json',
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
     });
 
     const response = await bedrock.send(command);
 
-    for await (const chunk of response.body) {
-      if (chunk.chunk?.bytes) {
-        const decoded = JSON.parse(Buffer.from(chunk.chunk.bytes).toString('utf-8'));
+    let fullText = '';
+
+    for await (const event of response.body) {
+      if (event.chunk?.bytes) {
+        const decoded = JSON.parse(
+          Buffer.from(event.chunk.bytes).toString('utf-8')
+        );
 
         if (decoded.contentBlockDelta?.delta?.text) {
           const text = decoded.contentBlockDelta.delta.text;
-          res.write(`data: ${JSON.stringify({ text })}\n\n`);
+          fullText += text;
+          res.write(`data: ${JSON.stringify({ type: 'delta', text })}\n\n`);
         }
 
         if (decoded.messageStop) {
-          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+          res.write(`data: ${JSON.stringify({ type: 'done', fullText })}\n\n`);
           break;
         }
       }
@@ -207,27 +130,22 @@ app.post('/api/analyze', upload.single('image'), async (req, res) => {
 
     res.end();
   } catch (err) {
-    console.error('Analyze error:', err);
+    console.error('Analysis error:', err);
     if (!res.headersSent) {
-      res.status(500).json({ error: err.message || 'Internal server error' });
+      res.status(500).json({ error: err.message });
     } else {
-      res.write(`data: ${JSON.stringify({ error: err.message || 'Stream error' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: err.message })}\n\n`);
       res.end();
     }
   }
 });
 
-// SPA fallback
-app.get('/{*path}', (req, res) => {
-  const indexPath = join(clientDist, 'index.html');
-  if (existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).json({ error: 'Client not built. Run: cd client && npm run build' });
-  }
+app.get('*', (_req, res) => {
+  res.sendFile(join(__dirname, '../client/dist/index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`NovaLens server running on http://localhost:${PORT}`);
-  console.log(`Model: ${MODEL_ID}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`NovaLens running on port ${PORT}`);
+  console.log(`Using model: ${MODEL_ID}`);
 });
